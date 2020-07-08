@@ -51,11 +51,24 @@ class BasePlugin:
         'Temp': 3,
         'Hum':  4,
         'Mode': 5,
+        'OutdoorTemp': 6,
+        'SupplyTemp': 7,
+        'ExtractTemp': 8,
+        'WaterTemp': 9,
         'TotalEnergyConsumtion': 11,
         'TotalHeaterConsumtion': 12,
         'TotalEnergyRecovered': 13,
         'CurrentExchangeEfficiency': 14,
-        'CurrentEnergySaving': 15
+        'CurrentEnergySaving': 15,
+
+        'SupplyFanIntensivity': 20,
+        'ExtractFanIntensivity': 21,
+        'HeatExchanger': 22,
+        'ElectricHeater': 23,
+        'WaterHeater': 24,
+        'WaterCooler': 25,
+        'DXUnit': 26,
+        'FiltersImupurity': 27
         }
 
     def __init__(self):
@@ -88,6 +101,45 @@ class BasePlugin:
                        "SelectorStyle": "1"}
             Domoticz.Device(Name="Mode", Unit=self.UNITS['Mode'], TypeName="Selector Switch", Used=1, Image=7,
                             Options=Options).Create()
+
+        if self.UNITS['OutdoorTemp'] not in Devices:
+            Domoticz.Device(Name="Outside Temperature", Unit=self.UNITS['OutdoorTemp'],
+                            TypeName="Temperature", Used=1).Create()
+        if self.UNITS['SupplyTemp'] not in Devices:
+            Domoticz.Device(Name="Air Blowed In Temperature", Unit=self.UNITS['SupplyTemp'],
+                            TypeName="Temperature", Used=1).Create()
+        if self.UNITS['ExtractTemp'] not in Devices:
+            Domoticz.Device(Name="Air Blowed Out Temperature", Unit=self.UNITS['ExtractTemp'],
+                            TypeName="Temperature", Used=1).Create()
+        if self.UNITS['WaterTemp'] not in Devices:
+            Domoticz.Device(Name="Water Temperature", Unit=self.UNITS['WaterTemp'],
+                            TypeName="Temperature", Used=1).Create()
+
+        if self.UNITS['SupplyFanIntensivity'] not in Devices:
+            Domoticz.Device(Name="Supply Fan Intensivity", Unit=self.UNITS['SupplyFanIntensivity'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['ExtractFanIntensivity'] not in Devices:
+            Domoticz.Device(Name="Extract Fan Intensivity", Unit=self.UNITS['ExtractFanIntensivity'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['HeatExchanger'] not in Devices:
+            Domoticz.Device(Name="Heat Exchanger", Unit=self.UNITS['HeatExchanger'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['ElectricHeater'] not in Devices:
+            Domoticz.Device(Name="Electric Heater", Unit=self.UNITS['ElectricHeater'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['WaterHeater'] not in Devices:
+            Domoticz.Device(Name="Water Heater", Unit=self.UNITS['WaterHeater'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['WaterCooler'] not in Devices:
+            Domoticz.Device(Name="Water Cooler", Unit=self.UNITS['WaterCooler'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['DXUnit'] not in Devices:
+            Domoticz.Device(Name="DX Unit", Unit=self.UNITS['DXUnit'],
+                            TypeName="Percentage", Used=1).Create()
+        if self.UNITS['FiltersImupurity'] not in Devices:
+            Domoticz.Device(Name="Filters Imupurity", Unit=self.UNITS['FiltersImupurity'],
+                            TypeName="Percentage", Used=1).Create()
+
         if self.UNITS['CurrentEnergySaving'] not in Devices:
             Domoticz.Device(Name="Current Energy Saving", Unit=self.UNITS['CurrentEnergySaving'],
                             TypeName="Percentage", Used=1).Create()
@@ -143,8 +195,6 @@ class BasePlugin:
         UpdateDevice(Unit, nVal, Command, 0)
         self.client.close()
 
-        # Domoticz.Log("onCommand called for Unit " + str(Unit) + ": Parameter '" + str(Command) + "', Level: " + str(Level))
-
     def onNotification(self, Name, Subject, Text, Status, Priority, Sound, ImageFile):
         Domoticz.Log("Notification: " + Name + "," + Subject + "," + Text + "," + Status + "," + str(Priority) + "," + Sound + "," + ImageFile)
 
@@ -163,19 +213,49 @@ class BasePlugin:
             UpdateDevice(self.UNITS['ECO'], eco, str(eco), 0)
             UpdateDevice(self.UNITS['Auto'], auto,  str(auto), 0)
             UpdateDevice(self.UNITS['Mode'], mode, str(mode), 0)
-            # Domoticz.Log("eco :" + str(eco) + " auto: " + str(auto))
 
-        result = self.client.read_holding_registers(920, 27)
-        if not result.isError():
-            CurrentPowerConsumption = int(result.registers[0])
-            CurrentHeaterPower = int(result.registers[1])
-            CurrentHeatRecovery = int(result.registers[2])
-            CurrentExchangeEfficiency = int(result.registers[3])
-            CurrentEnergySaving = int(result.registers[4])
+        registersStartingOffset = 20
+        MonitoringDataResult = self.client.read_holding_registers(900, 47)
 
-            decoder = BinaryPayloadDecoder.fromRegisters(result.registers,
+        if not MonitoringDataResult.isError():
+            SupplyTemp = float(MonitoringDataResult.registers[1]) / 10
+            ExtractTemp = float(MonitoringDataResult.registers[2]) / 10
+            OutdoorTemp = float(MonitoringDataResult.registers[3]) / 10
+            WaterTemp   = float(MonitoringDataResult.registers[4]) / 10
+
+            UpdateDevice(self.UNITS['OutdoorTemp'], 0, str(OutdoorTemp), 0)
+            UpdateDevice(self.UNITS['SupplyTemp'], 0, str(SupplyTemp), 0)
+            UpdateDevice(self.UNITS['ExtractTemp'], 0, str(ExtractTemp), 0)
+            UpdateDevice(self.UNITS['WaterTemp'], 0, str(WaterTemp), 0)
+
+            SupplyFanIntens     = float(MonitoringDataResult.registers[9]) / 10
+            ExtractFanIntens    = float(MonitoringDataResult.registers[10]) / 10
+            HeatExchanger       = float(MonitoringDataResult.registers[11]) / 10
+            ElectricHeater      = float(MonitoringDataResult.registers[12]) / 10
+            WaterHeater         = float(MonitoringDataResult.registers[13]) / 10
+            WaterCooling        = float(MonitoringDataResult.registers[14]) / 10
+            DXUnit              = float(MonitoringDataResult.registers[15]) / 10
+            FiltersImupurity    = float(MonitoringDataResult.registers[16])
+
+            UpdateDevice(self.UNITS['SupplyFanIntensivity'], 0, str(SupplyFanIntens), 0)
+            UpdateDevice(self.UNITS['ExtractFanIntensivity'], 0, str(ExtractFanIntens), 0)
+            UpdateDevice(self.UNITS['HeatExchanger'], 0, str(HeatExchanger), 0)
+            UpdateDevice(self.UNITS['ElectricHeater'], 0, str(ElectricHeater), 0)
+            UpdateDevice(self.UNITS['WaterHeater'], 0, str(WaterHeater), 0)
+            UpdateDevice(self.UNITS['WaterCooler'], 0, str(WaterCooling), 0)
+            UpdateDevice(self.UNITS['DXUnit'], 0, str(DXUnit), 0)
+            UpdateDevice(self.UNITS['FiltersImupurity'], 0, str(FiltersImupurity), 0)
+
+            CurrentPowerConsumption = int(MonitoringDataResult.registers[0+registersStartingOffset])
+            CurrentHeaterPower = int(MonitoringDataResult.registers[1+registersStartingOffset])
+            CurrentHeatRecovery = int(MonitoringDataResult.registers[2+registersStartingOffset])
+            CurrentExchangeEfficiency = int(MonitoringDataResult.registers[3+registersStartingOffset])
+            CurrentEnergySaving = int(MonitoringDataResult.registers[4+registersStartingOffset])
+
+            decoder = BinaryPayloadDecoder.fromRegisters(MonitoringDataResult.registers,
                                                byteorder=Endian.Big)
-            decoder.skip_bytes(20)
+
+            decoder.skip_bytes(6+17*2+5*4) # 6 * char + 17 * short + 5 * int
             TotalEnergyConsumtion = decoder.decode_32bit_uint()  # reg[11-12] from byte[21]
             UpdateDevice(self.UNITS['TotalEnergyConsumtion'], 0, str(CurrentPowerConsumption)+';'+str(TotalEnergyConsumtion), 0)
 
@@ -187,8 +267,8 @@ class BasePlugin:
             TotalEnergyRecovered = decoder.decode_32bit_uint()  # reg[23-24] from byte[44]
             UpdateDevice(self.UNITS['TotalEnergyRecovered'], 0, str(CurrentHeatRecovery)+';'+str(TotalEnergyRecovered), 0)
 
-            temperature = float(result.registers[25]) / 10
-            humidity = int(result.registers[26])
+            temperature = float(MonitoringDataResult.registers[25+registersStartingOffset]) / 10
+            humidity = int(MonitoringDataResult.registers[26+registersStartingOffset])
 
             UpdateDevice(self.UNITS['CurrentExchangeEfficiency'], 0, str(CurrentExchangeEfficiency), 0)
             UpdateDevice(self.UNITS['CurrentEnergySaving'], 0, str(CurrentEnergySaving), 0)
@@ -207,8 +287,8 @@ class BasePlugin:
             Domoticz.Log("TotalEnergyConsumtion: " + str(TotalEnergyConsumtion))
             Domoticz.Log("TotalHeaterConsumtion: " + str(TotalHeaterConsumtion))
             Domoticz.Log("TotalEnergyRecovered: " + str(TotalEnergyRecovered))
-            Domoticz.Log("temperature: " + str(temperature))
-            Domoticz.Log("humidity: " + str(humidity))
+            Domoticz.Log("Temperature: " + str(temperature))
+            Domoticz.Log("Humidity: " + str(humidity))
 
 global _plugin
 _plugin = BasePlugin()
