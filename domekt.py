@@ -32,6 +32,7 @@
 </plugin>
 """
 import Domoticz
+import ctypes
 
 from pymodbus.constants import Endian
 from pymodbus.client.sync import ModbusTcpClient
@@ -218,23 +219,23 @@ class BasePlugin:
         MonitoringDataResult = self.client.read_holding_registers(900, 47)
 
         if not MonitoringDataResult.isError():
-            SupplyTemp = float(MonitoringDataResult.registers[1]) / 10
-            ExtractTemp = float(MonitoringDataResult.registers[2]) / 10
-            OutdoorTemp = float(MonitoringDataResult.registers[3]) / 10
-            WaterTemp   = float(MonitoringDataResult.registers[4]) / 10
+            SupplyTemp  = ConvertToFloat(MonitoringDataResult, 1)
+            ExtractTemp = ConvertToFloat(MonitoringDataResult, 2)
+            OutdoorTemp = ConvertToFloat(MonitoringDataResult, 3)
+            WaterTemp   = ConvertToFloat(MonitoringDataResult, 4)
 
             UpdateDevice(self.UNITS['OutdoorTemp'], 0, str(OutdoorTemp), 0)
             UpdateDevice(self.UNITS['SupplyTemp'], 0, str(SupplyTemp), 0)
             UpdateDevice(self.UNITS['ExtractTemp'], 0, str(ExtractTemp), 0)
             UpdateDevice(self.UNITS['WaterTemp'], 0, str(WaterTemp), 0)
 
-            SupplyFanIntens     = float(MonitoringDataResult.registers[9]) / 10
-            ExtractFanIntens    = float(MonitoringDataResult.registers[10]) / 10
-            HeatExchanger       = float(MonitoringDataResult.registers[11]) / 10
-            ElectricHeater      = float(MonitoringDataResult.registers[12]) / 10
-            WaterHeater         = float(MonitoringDataResult.registers[13]) / 10
-            WaterCooling        = float(MonitoringDataResult.registers[14]) / 10
-            DXUnit              = float(MonitoringDataResult.registers[15]) / 10
+            SupplyFanIntens     = ConvertToFloat(MonitoringDataResult, 9)
+            ExtractFanIntens    = ConvertToFloat(MonitoringDataResult, 10)
+            HeatExchanger       = ConvertToFloat(MonitoringDataResult, 11)
+            ElectricHeater      = ConvertToFloat(MonitoringDataResult, 12)
+            WaterHeater         = ConvertToFloat(MonitoringDataResult, 13)
+            WaterCooling        = ConvertToFloat(MonitoringDataResult, 14)
+            DXUnit              = ConvertToFloat(MonitoringDataResult, 15)
             FiltersImupurity    = float(MonitoringDataResult.registers[16])
 
             UpdateDevice(self.UNITS['SupplyFanIntensivity'], 0, str(SupplyFanIntens), 0)
@@ -349,3 +350,6 @@ def UpdateDevice(Unit, nValue, sValue, TimedOut):
             # Domoticz.Log("Update "+str(nValue)+":'"+str(sValue)+"' ("+Devices[Unit].Name+")")
     return
 
+
+def ConvertToFloat(data, reg):
+    return float(ctypes.c_short(data.registers[reg]).value) / 10
