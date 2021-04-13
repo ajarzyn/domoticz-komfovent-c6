@@ -268,7 +268,7 @@ class BasePlugin:
             TotalEnergyRecovered = decoder.decode_32bit_uint()  # reg[23-24] from byte[44]
             UpdateDevice(self.UNITS['TotalEnergyRecovered'], 0, str(CurrentHeatRecovery)+';'+str(TotalEnergyRecovered), 0)
 
-            temperature = float(MonitoringDataResult.registers[25+registersStartingOffset]) / 10
+            temperature = ConvertToFloat(MonitoringDataResult, 25+registersStartingOffset)
             humidity = int(MonitoringDataResult.registers[26+registersStartingOffset])
 
             UpdateDevice(self.UNITS['CurrentExchangeEfficiency'], 0, str(CurrentExchangeEfficiency), 0)
