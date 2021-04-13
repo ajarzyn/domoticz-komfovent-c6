@@ -69,14 +69,16 @@ class BasePlugin:
         'WaterHeater': 24,
         'WaterCooler': 25,
         'DXUnit': 26,
-        'FiltersImupurity': 27
+        'FiltersImupurity': 27,
+
+        'TempControlType': 50,
+        'OnOff': 51,
         }
 
     def __init__(self):
         return
 
     def onStart(self):
-
         # setup the appropriate logging level
         if Parameters['Mode6'] == "true":
             Domoticz.Debugging(1)
@@ -87,6 +89,8 @@ class BasePlugin:
 
         self.client = ModbusTcpClient(Parameters['Address'], port=int(Parameters['Port']))
 
+        if self.UNITS['OnOff'] not in Devices:
+            Domoticz.Device(Name="OnOff", Unit=self.UNITS['OnOff'], TypeName="Switch", Image=9, Used=1).Create()
         if self.UNITS['ECO'] not in Devices:
             Domoticz.Device(Name="ECO", Unit=self.UNITS['ECO'], TypeName="Switch", Image=9, Used=1).Create()
         if self.UNITS['Auto'] not in Devices:
@@ -157,6 +161,14 @@ class BasePlugin:
             Domoticz.Device(Name="Total Energy Recovered", Unit=self.UNITS['TotalEnergyRecovered'],
                             TypeName="kWh", Used=1).Create()
 
+        if self.UNITS['TempControlType'] not in Devices:
+            Options = {"LevelActions": "||||",
+                       "LevelNames": "Off|Supply|Extract|Room|Balance",
+                       "LevelOffHidden": "true",
+                       "SelectorStyle": "1"}
+            Domoticz.Device(Name="TempControlType", Unit=self.UNITS['TempControlType'], TypeName="Selector Switch", Used=1, Image=7,
+                            Options=Options).Create()
+
     def onStop(self):
         Domoticz.Log("onStop called")
 
@@ -171,13 +183,22 @@ class BasePlugin:
                      str(Level) + str(Hue))
         self.client.connect()
 
-        if Unit == self.UNITS['Mode'] and Command == 'Set Level':
-            if Level in self.AVAILABLE_LEVELS:
-                self.client.write_register(4, value=int(Level/10))
-                UpdateDevice(Unit, Level, Level, 0)
-                Domoticz.Log("Air flow mode changed")
-            else:
-                Domoticz.Log("Impossible to choose this mode")
+        if Command == 'Set Level':
+            if Unit == self.UNITS['Mode']:
+                if Level in self.AVAILABLE_LEVELS:
+                    self.client.write_register(4, value=int(Level/10))
+                    UpdateDevice(Unit, Level, Level, 0)
+                    Domoticz.Log("Air flow mode changed.")
+                else:
+                    Domoticz.Log("Impossible to choose this mode.")
+
+            elif Unit == self.UNITS['TempControlType']:
+                if Level in self.AVAILABLE_LEVELS:
+                    self.client.write_register(10, value=int((Level-10)/10))
+                    UpdateDevice(Unit, Level, Level, 0)
+                    Domoticz.Log("Temperature Flow Control mode changed." +str(int((Level-10)/10)))
+                else:
+                    Domoticz.Log("Impossible to choose this Temperature Flow Control mode.")
 
             self.client.close()
             return
@@ -187,7 +208,9 @@ class BasePlugin:
         elif Command == 'On':
             nVal = 1
 
-        if Unit == self.UNITS['ECO']:
+        if Unit == self.UNITS['OnOff']:
+            rAddr = 0
+        elif Unit == self.UNITS['ECO']:
             rAddr = 2
         elif Unit == self.UNITS['Auto']:
             rAddr = 3
@@ -205,15 +228,19 @@ class BasePlugin:
     def onHeartbeat(self):
         self.client.connect()
 
-        result = self.client.read_holding_registers(2, 3)
+        result = self.client.read_holding_registers(0, 11)
         if not result.isError():
-            eco = int(result.registers[0])
-            auto = int(result.registers[1])
-            mode = int(result.registers[2]) * 10
+            on_off = int(result.registers[0])
+            eco = int(result.registers[2])
+            auto = int(result.registers[3])
+            mode = int(result.registers[4]) * 10
+            temp_control = int(result.registers[10]) * 10 + 10
 
+            UpdateDevice(self.UNITS['OnOff'], on_off, str(on_off), 0)
             UpdateDevice(self.UNITS['ECO'], eco, str(eco), 0)
             UpdateDevice(self.UNITS['Auto'], auto,  str(auto), 0)
             UpdateDevice(self.UNITS['Mode'], mode, str(mode), 0)
+            UpdateDevice(self.UNITS['TempControlType'], temp_control, str(temp_control), 0)
 
         registersStartingOffset = 20
         MonitoringDataResult = self.client.read_holding_registers(900, 47)
@@ -277,56 +304,67 @@ class BasePlugin:
             UpdateDevice(self.UNITS['Temp'], 0, str(temperature), 0)
             UpdateDevice(self.UNITS['Hum'], humidity, str(humidity), 0)
 
+            if self.debug:
+                Domoticz.Log("CurrentPowerConsumption: " + str(CurrentPowerConsumption))
+                Domoticz.Log("CurrentHeaterPower: " + str(CurrentHeaterPower))
+                Domoticz.Log("CurrentHeatRecovery: " + str(CurrentHeatRecovery))
+                Domoticz.Log("CurrentExchangeEfficiency: " + str(CurrentExchangeEfficiency))
+                Domoticz.Log("CurrentEnergySaving: " + str(CurrentEnergySaving))
+                Domoticz.Log("CurrentEnergySaving: " + str(CurrentEnergySaving))
+                Domoticz.Log("TotalEnergyConsumtion: " + str(TotalEnergyConsumtion))
+                Domoticz.Log("TotalHeaterConsumtion: " + str(TotalHeaterConsumtion))
+                Domoticz.Log("TotalEnergyRecovered: " + str(TotalEnergyRecovered))
+                Domoticz.Log("Temperature: " + str(temperature))
+                Domoticz.Log("Humidity: " + str(humidity))
+
         self.client.close()
-        if False:
-            Domoticz.Log("CurrentPowerConsumption: " + str(CurrentPowerConsumption))
-            Domoticz.Log("CurrentHeaterPower: " + str(CurrentHeaterPower))
-            Domoticz.Log("CurrentHeatRecovery: " + str(CurrentHeatRecovery))
-            Domoticz.Log("CurrentExchangeEfficiency: " + str(CurrentExchangeEfficiency))
-            Domoticz.Log("CurrentEnergySaving: " + str(CurrentEnergySaving))
-            Domoticz.Log("CurrentEnergySaving: " + str(CurrentEnergySaving))
-            Domoticz.Log("TotalEnergyConsumtion: " + str(TotalEnergyConsumtion))
-            Domoticz.Log("TotalHeaterConsumtion: " + str(TotalHeaterConsumtion))
-            Domoticz.Log("TotalEnergyRecovered: " + str(TotalEnergyRecovered))
-            Domoticz.Log("Temperature: " + str(temperature))
-            Domoticz.Log("Humidity: " + str(humidity))
+
 
 global _plugin
 _plugin = BasePlugin()
+
 
 def onStart():
     global _plugin
     _plugin.onStart()
 
+
 def onStop():
     global _plugin
     _plugin.onStop()
+
 
 def onConnect(Connection, Status, Description):
     global _plugin
     _plugin.onConnect(Connection, Status, Description)
 
+
 def onMessage(Connection, Data):
     global _plugin
     _plugin.onMessage(Connection, Data)
+
 
 def onCommand(Unit, Command, Level, Hue):
     global _plugin
     _plugin.onCommand(Unit, Command, Level, Hue)
 
+
 def onNotification(Name, Subject, Text, Status, Priority, Sound, ImageFile):
     global _plugin
     _plugin.onNotification(Name, Subject, Text, Status, Priority, Sound, ImageFile)
+
 
 def onDisconnect(Connection):
     global _plugin
     _plugin.onDisconnect(Connection)
 
+
 def onHeartbeat():
     global _plugin
     _plugin.onHeartbeat()
 
-    # Generic helper functions
+
+# Generic helper functions
 def DumpConfigToLog():
     for x in Parameters:
         if Parameters[x] != "":
