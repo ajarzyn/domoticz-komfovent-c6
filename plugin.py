@@ -1,9 +1,9 @@
 # DOMEKT air supply plugin
 """
-<plugin key="DOMEKT" name="Domekt" author="jarzyn" version="1.0.0" wikilink="" externallink="">
+<plugin key="DOMEKT" name="Domekt" author="ajarzyn" version="1.0.1" wikilink="" externallink="">
     <description>
-        <h2>DOMEKT Roratory heat exchanger</h2><br/>
-        This plygin allows to controll and monitor work parameters of Ventia's Rotatory heat exchagers.
+        <h2>Ventia Komfovent C6 Rotatory heat exchanger</h2><br/>
+        This plugin allows to control and monitor work parameters of Ventia's Rotatory heat exchangers.
         <h3>Features</h3>
         <ul style="list-style-type:square">
             <li>Monitor work parameters</li>
@@ -38,13 +38,11 @@ from pymodbus.constants import Endian
 from pymodbus.client.sync import ModbusTcpClient
 from pymodbus.payload import BinaryPayloadDecoder
 
+
 class BasePlugin:
     enabled = False
     debug = False
-    AVAILABLE_LEVELS = [10,
-                        20,
-                        30,
-                        40]
+    available_mode_levels = [10, 20, 30, 40]
 
     UNITS = {
         'ECO':  1,
@@ -73,6 +71,8 @@ class BasePlugin:
 
         'TempControlType': 50,
         'OnOff': 51,
+        'Kitchen': 52,
+        'Fireplace': 53
         }
 
     def __init__(self):
@@ -169,6 +169,11 @@ class BasePlugin:
             Domoticz.Device(Name="TempControlType", Unit=self.UNITS['TempControlType'], TypeName="Selector Switch", Used=1, Image=7,
                             Options=Options).Create()
 
+        if self.UNITS['Kitchen'] not in Devices:
+            Domoticz.Device(Name="Kitchen", Unit=self.UNITS['Kitchen'], TypeName="Dimmer", Used=1).Create()
+        if self.UNITS['Fireplace'] not in Devices:
+            Domoticz.Device(Name="Fireplace", Unit=self.UNITS['Fireplace'], TypeName="Dimmer", Used=1).Create()
+
     def onStop(self):
         Domoticz.Log("onStop called")
 
@@ -185,7 +190,7 @@ class BasePlugin:
 
         if Command == 'Set Level':
             if Unit == self.UNITS['Mode']:
-                if Level in self.AVAILABLE_LEVELS:
+                if Level in self.available_mode_levels:
                     self.client.write_register(4, value=int(Level/10))
                     UpdateDevice(Unit, Level, Level, 0)
                     Domoticz.Log("Air flow mode changed.")
@@ -193,12 +198,20 @@ class BasePlugin:
                     Domoticz.Log("Impossible to choose this mode.")
 
             elif Unit == self.UNITS['TempControlType']:
-                if Level in self.AVAILABLE_LEVELS:
+                if Level in self.available_mode_levels:
                     self.client.write_register(10, value=int((Level-10)/10))
                     UpdateDevice(Unit, Level, Level, 0)
                     Domoticz.Log("Temperature Flow Control mode changed." +str(int((Level-10)/10)))
                 else:
                     Domoticz.Log("Impossible to choose this Temperature Flow Control mode.")
+
+            elif Unit == self.UNITS['Kitchen']:
+                self.client.write_register(5130, Level)
+                UpdateDevice(Unit, Level, Level, 0)
+
+            elif Unit == self.UNITS['Fireplace']:
+                self.client.write_register(5137, Level)
+                UpdateDevice(Unit, Level, Level, 0)
 
             self.client.close()
             return
@@ -240,6 +253,14 @@ class BasePlugin:
             UpdateDevice(self.UNITS['ECO'], eco, str(eco), 0)
             UpdateDevice(self.UNITS['Auto'], auto,  str(auto), 0)
             UpdateDevice(self.UNITS['Mode'], mode, str(mode), 0)
+            if mode == 50:  # Kitchen
+                UpdateDevice(self.UNITS['Kitchen'], 5, str(5), 0)
+            elif mode == 60:  # Fireplace
+                UpdateDevice(self.UNITS['Fireplace'], 5, str(5), 0)
+            else:
+                UpdateDevice(self.UNITS['Kitchen'], 0, str(0), 0)
+                UpdateDevice(self.UNITS['Fireplace'], 0, str(0), 0)
+
             UpdateDevice(self.UNITS['TempControlType'], temp_control, str(temp_control), 0)
 
         registersStartingOffset = 20
