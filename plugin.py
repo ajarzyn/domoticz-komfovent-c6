@@ -22,6 +22,12 @@
     <params>
         <param field="Address" label="IP Address" width="200px" required="true" default="127.0.0.1"/>
         <param field="Port" label="Port" width="30px" required="true" default="502"/>
+        <param field="Mode5" label="SyncTime" width="75px">
+            <options>
+                <option label="True" value="true"/>
+                <option label="False" value="false"  default="true" />
+            </options>
+        </param>
         <param field="Mode6" label="Debug" width="75px">
             <options>
                 <option label="True" value="true"/>
@@ -33,6 +39,7 @@
 """
 import Domoticz
 import ctypes
+import datetime
 
 from pymodbus.constants import Endian
 from pymodbus.client.sync import ModbusTcpClient
@@ -76,10 +83,13 @@ class BasePlugin:
         }
 
     def __init__(self):
+        self.sync_time = False
         return
 
     def onStart(self):
         # setup the appropriate logging level
+        if Parameters['Mode5'] == "true":
+            self.sync_time = True
         if Parameters['Mode6'] == "true":
             Domoticz.Debugging(1)
             DumpConfigToLog()
@@ -262,6 +272,27 @@ class BasePlugin:
                 UpdateDevice(self.UNITS['Fireplace'], 0, str(0), 0)
 
             UpdateDevice(self.UNITS['TempControlType'], temp_control, str(temp_control), 0)
+
+        if self.sync_time:
+            result = self.client.read_holding_registers(28, 3)
+            if not result.isError():
+                time = int(result.registers[0])
+                hour, min = time >> 8, time & 0x00FF
+                year = int(result.registers[1])
+                date = int(result.registers[2])
+                month, day = date >> 8, date & 0x00FF
+
+                d1 = datetime.datetime.now()
+                if d1.hour != hour or d1.minute != min:
+                    time = d1.hour << 8 | d1.minute & 0x00FF
+                    self.client.write_register(28, value=time)
+
+                if d1.year != year:
+                    self.client.write_register(29, value=year)
+
+                if d1.month != month or d1.day != day:
+                    date = d1.month << 8 | d1.day & 0x00FF
+                    self.client.write_register(30, value=date)
 
         registersStartingOffset = 20
         MonitoringDataResult = self.client.read_holding_registers(900, 47)
